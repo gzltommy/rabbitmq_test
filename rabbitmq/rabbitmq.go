@@ -8,7 +8,7 @@ import (
 
 //url 格式 amqp://账号:密码@rabbitmq服务器地址:端口号/Virtual Host
 //格式在golang语言当中是固定不变的
-const MQURL = "amqp://guest:guest@127.0.0.1:5672/"
+const MQURL = "amqp://guest:guest@192.168.24.147:5672/"
 
 type RabbitMQ struct {
 	conn    *amqp.Connection //需要引入amqp包 https://learnku.com/articles/44185教会你如何引用amqp包
@@ -466,7 +466,7 @@ func (r *RabbitMQ) RecieveTopic() {
 	)
 	r.failOnErr(err, "Failed to declare a queue")
 
-	//3.绑定队列到exchange中去
+	//3.绑定队列到 exchange 中去
 	err = r.channel.QueueBind(
 		q.Name, //队列的名称  通过 key 去找绑定好队列
 		//在路由模式下，这里的 key 要填写
@@ -496,6 +496,123 @@ func (r *RabbitMQ) RecieveTopic() {
 	if err != nil {
 		fmt.Println(err)
 	}
+	//4.2真正开始消费消息
+	forever := make(chan bool)
+	go func() {
+		for d := range message {
+			log.Printf("Received a message: %s", d.Body)
+		}
+	}()
+	fmt.Println("退出请按 ctrl+c")
+	<-forever
+}
+
+/*======================Test (one key -> mul queue) / (mul key -> one queue)=============================================*/
+
+//路由模式step1:创建RabbitMQ实例
+func NewRabbitMQRoutingTest(queueName, exchangeName string, routingKey string) *RabbitMQ {
+	return NewRabbitMQ(queueName, exchangeName, routingKey)
+}
+
+//路由模式step2:发送消息
+func (r *RabbitMQ) PublishRoutingTest(message string) {
+	//1.尝试创建交换机
+	err := r.channel.ExchangeDeclare(
+		//交换机名称
+		r.Exchange,
+		//类型  路由模式下我们需要将类型设置为 direct 这个和在订阅模式下是不一样的
+		"direct",
+		//进入的消息是否持久化 进入队列如果不消费那么消息就在队列里面 如果重启服务器那么这个消息就没啦 通常设置为false
+		true,
+		//是否为自动删除  这里解释的会更加清楚：https://blog.csdn.net/weixin_30646315/article/details/96224842?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase
+		false,
+		//true 表示这个 exchange 不可以被客户端用来推送消息，仅仅是用来进行 exchange 和 exchange 之间的绑定
+		false,
+		//队列消费是否阻塞 false 表示是阻塞,true 表示是不阻塞
+		false,
+		nil,
+	)
+	r.failOnErr(err, "Failed to declare an excha "+"nge")
+
+	//2.发送消息
+	err = r.channel.Publish(
+		r.Exchange,
+		//除了设置交换机这也要设置绑定的 key 值
+		r.Key,
+		//如果为 true 会根据 exchange 类型和 routkey 规则，如果无法找到符合条件的队列那么会把发送的消息返还给发送者
+		false,
+		//如果为 true,当 exchange 发送消息到队列后发现队列上没有绑定消费者则会把消息返还给发送者
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(message), // 发送的内容一定要转换成字节的形式
+		})
+}
+
+//路由模式step3：消费者
+func (r *RabbitMQ) ReceiveRoutingTest() {
+	//1.尝试创建交换机 exchange 如果交换机存在就不用管他，如果不存在则会创建交换机
+	err := r.channel.ExchangeDeclare(
+		//交换机名称
+		r.Exchange,
+		//类型  路由模式下我们需要将类型设置为 direct 类型
+		"direct",
+		//进入的消息是否持久化 进入队列如果不消费那么消息就在队列里面 如果重启服务器那么这个消息就没啦 通常设置为false
+		true,
+		//是否为自动删除  这里解释的会更加清楚：https://blog.csdn.net/weixin_30646315/article/details/96224842?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase
+		false,
+		//true 表示这个 exchange 不可以被客户端用来推送消息，仅仅是用来进行exchange和exchange之间的绑定
+		false,
+		//队列消费是否阻塞 false 表示是阻塞 true表示是不阻塞
+		false,
+		nil,
+	)
+	r.failOnErr(err, "Failed to declare an excha "+"nge")
+
+	//2.试探性创建队列，这里注意队列名称不要写哦
+	q, err := r.channel.QueueDeclare(
+		r.QueueName,
+		false,
+		false,
+		//具有排他性   排他性的理解 这篇文章还是比较好的：https://www.jianshu.com/p/94d6d5d98c3d
+		true,
+		false,
+		nil,
+	)
+	r.failOnErr(err, "Failed to declare a queue")
+
+	//3.绑定队列到 exchange 中去
+	err = r.channel.QueueBind(
+		q.Name, //队列的名称，通过 key 去找绑定好的队列
+		r.Key,  //在路由模式下，这里的 key 要填写
+		r.Exchange,
+		false,
+		nil,
+	)
+
+	r.failOnErr(err, "Failed to bind a queue")
+
+	//4.消费代码
+	//4.1接收队列消息
+	message, err := r.channel.Consume(
+		//队列名称
+		q.Name,
+		//用来区分多个消费者
+		"",
+		//是否自动应答 意思就是收到一个消息已经被消费者消费完了是否主动告诉 rabbitmq 服务器我已经消费完了你可以去删除这个消息啦 默认是 true
+		true,
+		//是否具有排他性
+		false,
+		//如果设置为true表示不能将同一个connection中发送的消息传递给同个connectio中的消费者
+		false,
+		//队列消费是否阻塞 fase表示是阻塞 true表示是不阻塞
+		false,
+		nil,
+	)
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	//4.2真正开始消费消息
 	forever := make(chan bool)
 	go func() {
