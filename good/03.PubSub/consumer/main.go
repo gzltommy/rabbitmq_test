@@ -30,10 +30,10 @@ func main() {
 			err = ch.ExchangeDeclare(
 				"测试广播交换机", // 交换机名，需要跟消息发送方保持一致
 				"fanout",  // 交换机类型
-				true,      // 是否持久化
-				false,     // auto-deleted
-				false,     // internal
-				false,     // no-wait
+				true,      // 是否持久化,进入队列如果不消费那么消息就在队列里面,如果重启服务器那么这个消息就没啦 通常设置为 false
+				false,     // auto-deleted 是否为自动删除  这里解释的会更加清楚：https://blog.csdn.net/weixin_30646315/article/details/96224842?utm_medium=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-BlogCommendFromMachineLearnPai2-1.nonecase
+				false,     // internal true 表示这个 exchange 不可以被客户端用来推送消息，仅仅是用来进行 exchange 和 exchange 之间的绑定
+				false,     // no-wait 直接 false 即可 也不知道干啥滴
 				nil,       // arguments
 			)
 			failOnError(err, "Failed to declare an exchange")
