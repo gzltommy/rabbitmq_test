@@ -23,10 +23,10 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
-	//3、声明交换机
+	//3、声明 direct 交换机
 	err = ch.ExchangeDeclare(
 		"测试路由模式交换机", // 交换机名字
-		"direct",    // 交换机类型，fanout 发布订阅模式
+		"direct",    // 交换机类型，direct
 		true,        // 是否持久化
 		false,       // auto-deleted
 		false,       // internal

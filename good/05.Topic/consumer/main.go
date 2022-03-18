@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/streadway/amqp"
@@ -27,10 +26,10 @@ func main() {
 			failOnError(err, "Failed to open a channel")
 			defer ch.Close()
 
-			// 3、声明 direct 交换机
+			// 3、声明 topic 交换机
 			err = ch.ExchangeDeclare(
-				"测试路由模式交换机", // 交换机名，需要跟消息发送方保持一致
-				"direct",    // 交换机类型
+				"测试主题模式交换机", // 交换机名，需要跟消息发送方保持一致
+				"topic",     // 交换机类型
 				true,        // 是否持久化
 				false,       // auto-deleted
 				false,       // internal
@@ -52,9 +51,9 @@ func main() {
 
 			//5、队列绑定指定的交换机
 			err = ch.QueueBind(
-				q.Name,                              // 队列名
-				fmt.Sprintf("route_key_%d", number), // 路由参数，关键参数，如果匹配消息发送的时候指定的路由参数，消息就投递到当前队列
-				"测试路由模式交换机",                         // 交换机名字，需要跟消息发送端定义的交换器保持一致
+				q.Name,           // 队列名
+				"zorro.limiao.*", // 路由参数，关键参数，使用了通配符 * 星号，匹配一个单词，如果使用 # 井号可以匹配多个单词.
+				"测试主题模式交换机",      // 交换机名字，需要跟消息发送端定义的交换器保持一致
 				false,
 				nil)
 			failOnError(err, "Failed to bind a queue")

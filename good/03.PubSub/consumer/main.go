@@ -26,7 +26,7 @@ func main() {
 			failOnError(err, "Failed to open a channel")
 			defer ch.Close()
 
-			// 3、声明交换机
+			// 3、声明 fanout 交换机
 			err = ch.ExchangeDeclare(
 				"测试广播交换机", // 交换机名，需要跟消息发送方保持一致
 				"fanout",  // 交换机类型
