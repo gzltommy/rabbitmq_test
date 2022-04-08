@@ -1,4 +1,4 @@
-module go_test
+module rbtmq
 
 go 1.17
 
